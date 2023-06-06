@@ -1,0 +1,340 @@
+import { ColumnTitle, ColumnType } from 'antd/es/table/interface';
+import 'reflect-metadata';
+import { dataIndexKey, dataIndexMetadataKey } from '../dataIndex.decorator';
+import { keyMetadataKey, keyKey } from '../key.decorator';
+import { titleMetadataKey, titleKey } from '../title.decorator';
+
+import { DataIndex, Key } from 'rc-table/lib/interface';
+import { Typography } from 'antd';
+import { ShowComp } from './internal/components/ShowComp';
+import { renderMetadataKey, renderKey } from '../render.decorator';
+import { ComponentType, FunctionComponent } from 'react';
+import { joinColumnKey, joinColumnMetadataKey } from '../joinColumn.decorator';
+
+type Classable<T> = new (...args: any) => T;
+type ShowComponentProps = { value: any; record: any; index?: number };
+
+// TODO: type each key interface
+enum EntityMetadataKeys {
+    ANTD_TABLE_COLUMNS = 'AntdTable:columns',
+    SHOW_COMPONENT = 'Show:component',
+}
+
+interface AntdColumn<T> extends ColumnType<T> {
+    /**
+     * The Component to render when loading the Show view
+     *
+     * @privateRemarks
+     * TODO: check if this should change to a function that returns a ComponentType like refine's rendercell?
+     **/
+    renderTag?: ComponentType;
+}
+
+type AntdTableColumns<T> = Record<string | symbol, AntdColumn<T>>;
+
+interface AntdEntityOptions {
+    showComponent?: ComponentType<ShowComponentProps>;
+}
+
+/**
+ * Marks the class as usable for Antd's components: Table's {@link '@antd/es/table/ColumnsType' | ColumnsType}, etc.
+ * @decorators key, dataIndex, title, sorter, render
+ **/
+export function AntdEntity(options?: AntdEntityOptions): ClassDecorator;
+
+/**
+ * TODO: make it dynamic in base of available decorators and it's according @{link '@antd/es/table/ColumnsType' | column} property [clickup #865bgjt0e]
+ * TODO: extract each decorator get to its own function as with getFieldTitle() [clickup #865bh7p1x]
+ **/
+export function AntdEntity(
+    options: AntdEntityOptions = { showComponent: ShowComp }
+): ClassDecorator {
+    /**
+     * @param target - The class to which apply the decorator
+     * TODO: specify target's type -- possibly it could be something like FunctionConstructor, but it doesn't work straightforward, because a Class is indeed a Function under the hood - check if Classable works [clickup #865bh4t24]
+     **/
+    return function (entityClass: any) {
+        type EntityClassInstanceType = InstanceType<typeof entityClass>;
+        const decoratedClass = new entityClass();
+        const properties = Reflect.ownKeys(decoratedClass);
+        const columns: AntdTableColumns<EntityClassInstanceType> = {};
+
+        for (const property of properties) {
+            columns[property] = {};
+        }
+
+        for (const property of properties) {
+            let metadataValue: FunctionComponent | undefined = undefined;
+
+            if (
+                Reflect.hasMetadata(
+                    joinColumnMetadataKey,
+                    decoratedClass,
+                    property
+                )
+            ) {
+                metadataValue = Reflect.getMetadata(
+                    joinColumnMetadataKey,
+                    decoratedClass,
+                    property
+                );
+            }
+
+            const columnDefinition = columns[property];
+
+            columnDefinition[joinColumnKey] = metadataValue;
+        }
+
+        for (const property of properties) {
+            let metadataValue: DataIndex | undefined = undefined;
+
+            if (
+                Reflect.hasMetadata(
+                    dataIndexMetadataKey,
+                    decoratedClass,
+                    property
+                )
+            ) {
+                metadataValue = Reflect.getMetadata(
+                    dataIndexMetadataKey,
+                    decoratedClass,
+                    property
+                );
+            } else {
+                Reflect.defineMetadata(
+                    dataIndexMetadataKey,
+                    property,
+                    decoratedClass,
+                    property
+                );
+                metadataValue = property.toString();
+            }
+
+            const columnDefinition = columns[property];
+
+            columnDefinition[dataIndexKey] = metadataValue;
+        }
+
+        for (const property of properties) {
+            let metadataValue: Key | undefined = undefined;
+
+            if (Reflect.hasMetadata(keyMetadataKey, decoratedClass, property)) {
+                metadataValue = Reflect.getMetadata(
+                    keyMetadataKey,
+                    decoratedClass,
+                    property
+                );
+            } else {
+                Reflect.defineMetadata(
+                    keyMetadataKey,
+                    property,
+                    decoratedClass,
+                    property
+                );
+                metadataValue = property.toString();
+            }
+
+            const columnDefinition = columns[property];
+
+            columnDefinition[keyKey] = metadataValue;
+        }
+
+        for (const property of properties) {
+            let metadataValue = getFieldTitle(decoratedClass, property);
+            const columnDefinition = columns[property];
+
+            columnDefinition[titleKey] = metadataValue;
+        }
+
+        for (const property of properties) {
+            let metadataValue: React.ComponentType = Typography.Paragraph;
+
+            if (
+                Reflect.hasMetadata(renderMetadataKey, decoratedClass, property)
+            ) {
+                metadataValue = Reflect.getMetadata(
+                    renderMetadataKey,
+                    decoratedClass,
+                    property
+                );
+            } else {
+                Reflect.defineMetadata(
+                    renderMetadataKey,
+                    metadataValue,
+                    decoratedClass,
+                    property
+                );
+            }
+
+            const columnDefinition = columns[property];
+
+            columnDefinition[renderKey] = metadataValue;
+        }
+
+        Reflect.defineMetadata(
+            EntityMetadataKeys.ANTD_TABLE_COLUMNS,
+            columns,
+            entityClass
+        );
+
+        Reflect.defineMetadata(
+            EntityMetadataKeys.SHOW_COMPONENT,
+            { component: options.showComponent },
+            entityClass
+        );
+
+        return entityClass;
+    };
+}
+
+/**
+ * @internal
+ * Get metadata from an Entity.
+ **/
+function getMetadata<T>(
+    key: EntityMetadataKeys,
+    clazz: Classable<T>
+): Readonly<Record<string | symbol, any>> {
+    /** trick to clone object without pointing to the same memory structure @see {@link https://stackoverflow.com/a/38122523/11865068} **/
+    return Object.assign({}, Reflect.getMetadata(key, clazz));
+}
+
+// TODO: explain what this 3 functions get as parameters, what returns and why. Whenever it's needed type the params, returns and expected arguments in calls. [clickup #865bgjt87]
+export function antdEntityTableColumns<T>(
+    clazz: Classable<T>
+): ColumnType<T>[] {
+    return Object.values(
+        getMetadata(EntityMetadataKeys.ANTD_TABLE_COLUMNS, clazz) as Object
+    );
+}
+
+/**
+ * Converts previously processed metadata into AntdTable type.
+ **/
+export function antdEntityGetColumns<T>(
+    clazz: Classable<T>
+): AntdTableColumns<T> {
+    return getMetadata(
+        EntityMetadataKeys.ANTD_TABLE_COLUMNS,
+        clazz
+    ) as AntdTableColumns<T>;
+}
+
+export function antdEntityTableColumnsFromObj<T>(
+    obj: AntdColumn<T>
+): ColumnType<T>[] {
+    return Object.values(obj);
+}
+
+/**
+ *
+ * @param entityClass - The decorated class with the data properties to use
+ * @param dataObject - The JSON comming from the dataprovider which should be an instance of entityClass or an extension of it
+ **/
+export function antdEntityGetShowFields<T extends Object>(
+    entityClass: Classable<T>,
+    dataObject?: T
+): ShowFieldsType<T> {
+    // TODO: refactor variables names [clickup #865bh33dg]
+    const showFields: ShowFieldsType = {};
+    let columnsMetadata = antdEntityGetColumns(entityClass);
+    const entityInstance = castDataObjectToSpecifiedType(
+        entityClass,
+        dataObject
+    ) as AntdTableColumns<T>;
+
+    const entityDefinedProperties = Reflect.ownKeys(columnsMetadata);
+
+    // TODO: {nice to have} This might be pre-computed and memoized instead of calling the function everytime the Show Fields need to be rendered.
+    for (const [index, property] of entityDefinedProperties.entries()) {
+        // TODO: refactor metadata
+        const propertyField: Partial<ShowFields<typeof entityClass>> = {
+            value: entityInstance[property],
+            /**
+             * TODO: Take component from metadata and if it's null use Paragraph as default (done). This behaviour must be in some other method that handles metadata for an object, including this component property as getFieldTitle(). [clickup #865bh7nn8]
+             * 		 If property it's marked with @decorator `NotDisplay` component must be null.
+             * 		 If property it's marked with @decorator `NotDisplay` the render method must be no-op.
+             * 		 If property it's marked with @decorator `NotDisplay` the render method _probably_ should be sealed/freezed (impossible to change). Gather info about this, it may be possible for some cases that you wouldn't like to show a field in certain default cases but one would like to manage edge-cases manually, or show all fields nonetheless based on some flag (like debug).
+             * 		 If property it's marked with @decorator `NotDisplay`, the objFields for the property must be complete nonetheless.
+             **/
+            metadata: Object.assign(
+                {},
+                { renderTag: Typography.Paragraph },
+                property in columnsMetadata ? columnsMetadata[property] : {}
+            ),
+        };
+
+        // TODO: make showComponent be any component type and handle rendering different instead of calling a render method
+        const definedComponent = getMetadata(
+            EntityMetadataKeys.SHOW_COMPONENT,
+            entityClass
+        ) as Record<any, any>;
+        const showComponent =
+            definedComponent.component as React.FC<ShowComponentProps>;
+
+        propertyField.render = () =>
+            showComponent({
+                value: entityInstance[property],
+                record: propertyField,
+                index,
+            });
+        showFields[property] = propertyField as ShowFields<typeof entityClass>;
+    }
+
+    return showFields;
+}
+
+/**
+ * @internal
+ * This converts dataObject to an instance of the entity to be able to get the entity metadata and properties
+ **/
+function castDataObjectToSpecifiedType<T extends Object>(
+    entityClass: Classable<T>,
+    dataObject?: T
+) {
+    const entityInstance = new entityClass();
+    return Object.assign(entityInstance, dataObject);
+}
+
+export interface ShowFields<RecordType> {
+    value: any;
+    render: (
+        value?: any,
+        record?: RecordType,
+        index?: number
+    ) => React.ReactNode | React.ReactNode;
+    // TODO: type metadata
+    metadata?: Record<any, any>;
+}
+
+export type ShowFieldsType<RecordType extends object = any> = Record<
+    string | symbol,
+    ShowFields<RecordType>
+>;
+
+/**
+ * @internal
+ * Used to the information of a certain property of an object marked with the @{link title | title decorator}
+ **/
+function getFieldTitle(objectClass: any, property: string | symbol) {
+    type TargetClassType = InstanceType<typeof objectClass>;
+    let metadataValue: ColumnTitle<TargetClassType> | undefined = undefined;
+
+    if (Reflect.hasMetadata(titleMetadataKey, objectClass, property)) {
+        metadataValue = Reflect.getMetadata(
+            titleMetadataKey,
+            objectClass,
+            property
+        );
+    } else {
+        Reflect.defineMetadata(
+            titleMetadataKey,
+            property,
+            objectClass,
+            property
+        );
+        metadataValue = property.toString();
+    }
+
+    return metadataValue;
+}
