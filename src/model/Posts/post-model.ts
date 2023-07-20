@@ -1,7 +1,6 @@
-import { title } from "@bewise/jpf-decorators";
-import { AntdEntity } from "@bewise/jpf-decorators";
 import { Tag } from "antd";
-import { render } from "@bewise/jpf-decorators";
+import { AntdEntity } from "../../../packages/core/datamodel/decorators/dist";
+import { render, title } from "@bewise/jpf-decorators/src";
 
 @AntdEntity()
 export class Post {

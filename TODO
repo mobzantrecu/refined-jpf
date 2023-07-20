@@ -1,8 +1,0 @@
-Data provider =>  HTTP requests, capa de servicio, tiene por ej el getList, que se llama con el useList
-
-Data hooks => Data provider => API
-
-Hooks:
-    https://refine.dev/docs/api-reference/core/providers/data-provider/#supported-hooks
-    Cada hook tiene su implementacion para la eleccion del framework de UI 
-    useForm: You can think of useForm as a bridge between your state and dataProvider

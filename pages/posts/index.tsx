@@ -7,13 +7,10 @@ import {
   useSelect,
 } from "@refinedev/antd";
 import { Table, Select } from "antd";
-import {
-  antdEntityGetColumns,
-  antdEntityTableColumnsFromObj,
-} from "@bewise/jpf-decorators";
 import { Post } from "../../src/model/Posts/post-model";
+import { antdEntityGetColumns, antdEntityTableColumnsFromObj } from "../../packages/core/datamodel/decorators/dist";
 
-export const PostList: React.FC = () => {
+const PostList: React.FC = () => {
   const { tableProps } = useTable<Post>();
 
   const cols = antdEntityGetColumns<Post>(Post);
@@ -60,3 +57,5 @@ export const PostList: React.FC = () => {
     </List>
   );
 };
+
+export default PostList
